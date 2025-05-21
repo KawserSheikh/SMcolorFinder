@@ -1,102 +1,125 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import colorData from "./colorData";
 
-interface Color {
-  Code: string;
-  Name: string;
-  Hex: string;
-  R: number;
-  G: number;
-  B: number;
-}
-
-const getDistance = (
+function getDistance(
   r1: number,
   g1: number,
   b1: number,
   r2: number,
   g2: number,
   b2: number
-) => {
-  return Math.sqrt(
-    Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2)
-  );
+) {
+  return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+}
+
+type Color = {
+  Code: string;
+  Name: string;
+  Hex: string;
+  R: number;
+  G: number;
+  B: number;
 };
 
-const App: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [imageURL, setImageURL] = useState<string | null>(null);
+function App() {
+  const [image, setImage] = useState<string | null>(null);
   const [mainMatch, setMainMatch] = useState<Color | null>(null);
   const [suggestions, setSuggestions] = useState<Color[]>([]);
-
-  // Draw image to canvas when imageURL changes
-  useEffect(() => {
-    if (!imageURL) return;
-
-    const img = new Image();
-    img.onload = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = imageURL;
-  }, [imageURL]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImage(reader.result as string);
+      setMainMatch(null);
+      setSuggestions([]);
+    };
+    reader.readAsDataURL(file);
+  };
 
-    const url = URL.createObjectURL(file);
-    setImageURL(url);
-    setMainMatch(null);
-    setSuggestions([]);
+  const findClosestColors = (r: number, g: number, b: number) => {
+    let minDist = Infinity;
+    let closest: Color | null = null;
+    let allDistances: { color: Color; dist: number }[] = [];
+
+    for (const color of colorData) {
+      const dist = getDistance(r, g, b, color.R, color.G, color.B);
+      allDistances.push({ color, dist });
+      if (dist < minDist) {
+        minDist = dist;
+        closest = color;
+      }
+    }
+
+    // Sort by distance ascending and take top 4 (including main closest)
+    allDistances.sort((a, b) => a.dist - b.dist);
+    const topSuggestions = allDistances
+      .map(({ color }) => color)
+      .filter((c) => c !== closest)
+      .slice(0, 3);
+
+    setMainMatch(closest);
+    setSuggestions(topSuggestions);
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-
-    // Adjust click position to canvas internal resolution
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    const x = Math.floor((e.clientX - rect.left) * scaleX);
-    const y = Math.floor((e.clientY - rect.top) * scaleY);
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     const pixel = ctx.getImageData(x, y, 1, 1).data;
-
-    const r = pixel[0];
-    const g = pixel[1];
-    const b = pixel[2];
-
-    const distances = colorData.map((color) => ({
-      ...color,
-      distance: getDistance(r, g, b, color.R, color.G, color.B),
-    }));
-
-    distances.sort((a, b) => a.distance - b.distance);
-
-    const main = distances[0];
-    const top3 = distances.slice(1, 4);
-
-    setMainMatch(main);
-    setSuggestions(top3);
+    const [r, g, b] = pixel;
+    findClosestColors(r, g, b);
   };
 
-  return (
-    <div style={{ padding: 20, fontFamily: "Arial, sans-serif" }}>
-      <h1>🎨 Color Finder</h1>
+  useEffect(() => {
+    if (!image) return;
 
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = image;
+  }, [image]);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        marginBottom: 30,
+      }}
+    >
+      <img
+        src="/logo.png"
+        alt="Logo"
+        style={{ width: 200, height: "auto", marginBottom: 10 }}
+      />
+
+      {/* Welcome Title */}
+      <h2 style={{ marginBottom: 5, textAlign: "center" }}>
+        Welcome to Sewing Market Color Finder
+      </h2>
+      <h2 style={{ marginBottom: 30, textAlign: "center" }}>
+        مرحباً بكم في سوق الخياطة أداة البحث عن الألوان
+      </h2>
+
+      {/* File Upload */}
       <input
         type="file"
         accept="image/*"
@@ -104,83 +127,87 @@ const App: React.FC = () => {
         style={{ marginBottom: 20 }}
       />
 
-      {imageURL && (
+      {/* Canvas to show image and click to pick color */}
+      {image && (
         <canvas
           ref={canvasRef}
           onClick={handleCanvasClick}
           style={{
             border: "1px solid #ccc",
             maxWidth: "100%",
-            height: "auto",
-            display: "block",
-            marginBottom: 20,
             cursor: "crosshair",
+            marginBottom: 30,
           }}
         />
       )}
 
+      {/* Main closest color found */}
       {mainMatch && (
-        <div>
-          <h2>🎯 Closest Color Found:</h2>
+        <div
+          style={{
+            border: "2px solid black",
+            padding: 15,
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 15,
+            backgroundColor: mainMatch.Hex,
+            color: "#000",
+            borderRadius: 6,
+          }}
+        >
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 20,
-              border: "1px solid #ccc",
-              borderRadius: 5,
-              padding: 10,
-              minWidth: 200,
+              width: 50,
+              height: 50,
+              backgroundColor: mainMatch.Hex,
+              border: "1px solid #333",
             }}
-          >
-            <div
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 5,
-                backgroundColor: mainMatch.Hex,
-              }}
-            />
-            <div>
-              <div style={{ fontWeight: "bold" }}>{mainMatch.Code}</div>
-              <div>{mainMatch.Name}</div>
-              <div>{mainMatch.Hex}</div>
-            </div>
+          />
+          <div>
+            <h2>🎯 Closest Color Found:</h2>
+            <p>
+              <span>{mainMatch.Name} </span>
+              <span style={{ fontWeight: "bold" }}>
+                {mainMatch.Code}
+              </span> - <span>{mainMatch.Hex}</span>
+            </p>
           </div>
+        </div>
+      )}
 
-          <h3>🎨 Top 3 Suggestions:</h3>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            {suggestions.map((color, index) => (
+      {/* Suggested top 3 closest matches */}
+      {suggestions.length > 0 && (
+        <div>
+          <h3>Top 3 Suggestions:</h3>
+          <div style={{ display: "flex", gap: 20 }}>
+            {suggestions.map((color) => (
               <div
-                key={index}
+                key={color.Code}
                 style={{
-                  border: "1px solid #ccc",
-                  borderRadius: 5,
+                  border: "2px solid black",
                   padding: 10,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  minWidth: 200,
+                  borderRadius: 6,
+                  backgroundColor: color.Hex,
+                  color: "#000",
+                  width: 120,
+                  textAlign: "center",
+                  cursor: "pointer",
                 }}
+                title={`${color.Name} - ${color.Code}`}
               >
                 <div
                   style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 5,
+                    width: 40,
+                    height: 40,
                     backgroundColor: color.Hex,
+                    margin: "0 auto 10px",
+                    border: "1px solid #333",
                   }}
                 />
                 <div>
-                  <div style={{ fontWeight: "bold" }}>{color.Code}</div>
                   <div>{color.Name}</div>
+                  <div style={{ fontWeight: "bold" }}>{color.Code}</div>
                   <div>{color.Hex}</div>
                 </div>
               </div>
@@ -190,6 +217,6 @@ const App: React.FC = () => {
       )}
     </div>
   );
-};
+}
 
 export default App;
