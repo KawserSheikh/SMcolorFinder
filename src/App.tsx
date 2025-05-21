@@ -74,7 +74,9 @@ export default function App() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const pixel = ctx.getImageData(x, y, 1, 1).data;
-    const [r, g, b] = pixel;
+    const r = pixel[0];
+    const g = pixel[1];
+    const b = pixel[2];
     const hex = rgbToHex(r, g, b);
     setPickedColor({ r, g, b, hex });
     const matches = getTopMatches(r, g, b, 4);
@@ -93,6 +95,9 @@ export default function App() {
         />
         <h1 className="text-2xl font-bold text-center">
           Welcome to Sewing Market Color Finder
+        </h1>
+        <h1 className="text-2xl font-bold text-center">
+          مرحباً بكم في سوق الخياطة | أداة البحث عن الألوان
         </h1>
       </div>
 
