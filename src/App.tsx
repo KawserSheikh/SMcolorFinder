@@ -143,71 +143,67 @@ function App() {
 
       {/* Main closest color found */}
       {mainMatch && (
-        <div
-          style={{
-            border: "2px solid black",
-            padding: 15,
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 15,
-            backgroundColor: mainMatch.Hex,
-            color: "#000",
-            borderRadius: 6,
-          }}
-        >
+        <div>
+          <h2>🎯 Closest Color Found:</h2>
           <div
             style={{
-              width: 50,
-              height: 50,
-              backgroundColor: mainMatch.Hex,
-              border: "1px solid #333",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 20,
+              border: "1px solid #ccc",
+              borderRadius: 5,
+              padding: 10,
+              minWidth: 200,
             }}
-          />
-          <div>
-            <h2>🎯 Closest Color Found:</h2>
-            <p>
-              <span>{mainMatch.Name} </span>
-              <span style={{ fontWeight: "bold" }}>
-                {mainMatch.Code}
-              </span> - <span>{mainMatch.Hex}</span>
-            </p>
+          >
+            <div
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 5,
+                backgroundColor: mainMatch.Hex,
+              }}
+            />
+            <div>
+              <div style={{ fontWeight: "bold" }}>{mainMatch.Code}</div>
+              <div>{mainMatch.Name}</div>
+              <div>{mainMatch.Hex}</div>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Suggested top 3 closest matches */}
-      {suggestions.length > 0 && (
-        <div>
-          <h3>Top 3 Suggestions:</h3>
-          <div style={{ display: "flex", gap: 20 }}>
-            {suggestions.map((color) => (
+          <h3>🎨 Top 3 Suggestions:</h3>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            {suggestions.map((color, index) => (
               <div
-                key={color.Code}
+                key={index}
                 style={{
-                  border: "2px solid black",
+                  border: "1px solid #ccc",
+                  borderRadius: 5,
                   padding: 10,
-                  borderRadius: 6,
-                  backgroundColor: color.Hex,
-                  color: "#000",
-                  width: 120,
-                  textAlign: "center",
-                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  minWidth: 200,
                 }}
-                title={`${color.Name} - ${color.Code}`}
               >
                 <div
                   style={{
-                    width: 40,
-                    height: 40,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 5,
                     backgroundColor: color.Hex,
-                    margin: "0 auto 10px",
-                    border: "1px solid #333",
                   }}
                 />
                 <div>
-                  <div>{color.Name}</div>
                   <div style={{ fontWeight: "bold" }}>{color.Code}</div>
+                  <div>{color.Name}</div>
                   <div>{color.Hex}</div>
                 </div>
               </div>
