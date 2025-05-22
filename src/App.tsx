@@ -174,11 +174,14 @@ function App() {
         style={{ width: 200, marginBottom: 10 }}
       />
       <h2>Welcome to Sewing Market Color Finder</h2>
-      <h2 style={{ marginBottom: 20 }}>
+      <h2 style={{ marginBottom: 25 }}>
         مرحباً بكم في سوق الخياطة أداة البحث عن الألوان
       </h2>
-      <p style={{ fontWeight: 500, marginBottom: 10 }}>
-        Upload image or Take a photo to find color
+      <p style={{ fontWeight: 600, marginBottom: 10 }}>
+        Upload Image or Take a photo to find color
+      </p>
+      <p style={{ fontWeight: 600, marginBottom: 10 }}>
+        قم بتحميل صورة أو التقط صورة للعثور على اللون
       </p>
       <input
         type="file"
