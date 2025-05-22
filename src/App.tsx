@@ -29,7 +29,7 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files && e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -41,178 +41,164 @@ function App() {
     reader.readAsDataURL(file);
   };
 
-  const getTopMatches = (r: number, g: number, b: number, count: number) => {
-    return colorData
-      .map((color) => ({
-        color,
-        dist: getDistance(r, g, b, color.R, color.G, color.B),
-      }))
-      .sort((a, b) => a.dist - b.dist)
-      .slice(0, count)
-      .map((entry) => entry.color);
+  const findClosestColors = (r: number, g: number, b: number) => {
+    const distances = colorData.map((color) => ({
+      color,
+      dist: getDistance(r, g, b, color.R, color.G, color.B),
+    }));
+    distances.sort((a, b) => a.dist - b.dist);
+    const closest = distances[0].color;
+    const top3 = distances.slice(1, 4).map((d) => d.color);
+    setMainMatch(closest);
+    setSuggestions(top3);
   };
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const extractImageColors = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) * canvas.width) / rect.width;
-    const y = ((e.clientY - rect.top) * canvas.height) / rect.height;
-    const pixel = ctx.getImageData(x, y, 1, 1).data;
-    const [r, g, b] = pixel;
-    const top4 = getTopMatches(r, g, b, 4);
-    setMainMatch(top4[0]);
-    setSuggestions(top4.slice(1));
-  };
-
-  const extractDistinctMainColors = (canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
     const { width, height } = canvas;
-    const sampled = new Set<string>();
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+
     const matches: Color[] = [];
 
-    for (let y = 0; y < height; y += 20) {
-      for (let x = 0; x < width; x += 20) {
-        const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
-        const match = getTopMatches(r, g, b, 1)[0];
-        const key = match.Hex;
-        if (!sampled.has(key)) {
-          sampled.add(key);
-          matches.push(match);
-        }
+    for (let i = 0; i < imageData.length; i += 400 * 4) {
+      const r = imageData[i];
+      const g = imageData[i + 1];
+      const b = imageData[i + 2];
+
+      const distances = colorData.map((color) => ({
+        color,
+        dist: getDistance(r, g, b, color.R, color.G, color.B),
+      }));
+      distances.sort((a, b) => a.dist - b.dist);
+      const bestMatch = distances[0].color;
+
+      const isTooSimilar = matches.some(
+        (existing) =>
+          getDistance(
+            existing.R,
+            existing.G,
+            existing.B,
+            bestMatch.R,
+            bestMatch.G,
+            bestMatch.B
+          ) < 50
+      );
+
+      if (!isTooSimilar) {
+        matches.push(bestMatch);
       }
+
+      if (matches.length >= 6) break; // optional: stop after 6 distinct matches
     }
 
     setAllMatches(matches);
   };
 
+  const handleCanvasClick = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    let clientX = 0;
+    let clientY = 0;
+
+    if ("touches" in e) {
+      const touch = e.touches[0];
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const x = Math.floor((clientX - rect.left) * scaleX);
+    const y = Math.floor((clientY - rect.top) * scaleY);
+
+    const pixel = ctx.getImageData(x, y, 1, 1).data;
+    const [r, g, b] = pixel;
+
+    findClosestColors(r, g, b);
+  };
+
   useEffect(() => {
     if (!image) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-      extractDistinctMainColors(canvas); // Auto extract colors
+      extractImageColors();
     };
     img.src = image;
   }, [image]);
 
   return (
-    <div style={{ padding: 20, textAlign: "center" }}>
+    <div style={{ textAlign: "center", padding: 20 }}>
       <img
         src="/logo.png"
         alt="Logo"
-        style={{ width: 150, display: "flex", margin: "0 auto" }}
+        style={{ width: 200, marginBottom: 10 }}
       />
       <h2>Welcome to Sewing Market Color Finder</h2>
-      <h3>مرحباً بكم في سوق الخياطة أداة البحث عن الألوان</h3>
-
+      <h2 style={{ marginBottom: 20 }}>
+        مرحباً بكم في سوق الخياطة أداة البحث عن الألوان
+      </h2>
       <input
         type="file"
         accept="image/*"
         onChange={handleImageUpload}
-        style={{ margin: "20px 0" }}
+        style={{ marginBottom: 20 }}
       />
-
       {image && (
         <canvas
           ref={canvasRef}
           onClick={handleCanvasClick}
+          onTouchStart={handleCanvasClick}
           style={{
             border: "1px solid #ccc",
             maxWidth: "100%",
-            cursor: "crosshair",
             marginBottom: 30,
           }}
         />
       )}
-
       {mainMatch && (
-        <div style={{ marginBottom: 30 }}>
+        <div>
           <h2>🎯 Closest Color Found:</h2>
+          <ColorBox color={mainMatch} />
+        </div>
+      )}
+      {suggestions.length > 0 && (
+        <div>
+          <h3>🎨 Top 3 Suggestions:</h3>
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              border: "1px solid #ccc",
-              borderRadius: 5,
-              padding: 10,
-              maxWidth: 300,
-              margin: "0 auto",
-            }}
-          >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                backgroundColor: mainMatch.Hex,
-                borderRadius: 5,
-              }}
-            />
-            <div>
-              <div style={{ fontWeight: "bold" }}>{mainMatch.Code}</div>
-              <div>{mainMatch.Name}</div>
-              <div>{mainMatch.Hex}</div>
-            </div>
-          </div>
-
-          <h3 style={{ marginTop: 20 }}>🎨 Top 3 Suggestions:</h3>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
               flexWrap: "wrap",
+              justifyContent: "center",
               gap: 10,
             }}
           >
-            {suggestions.map((sug, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  border: "1px solid #ccc",
-                  borderRadius: 5,
-                  padding: 10,
-                  width: 250,
-                }}
-              >
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    backgroundColor: sug.Hex,
-                    borderRadius: 5,
-                  }}
-                />
-                <div>
-                  <div style={{ fontWeight: "bold" }}>{sug.Code}</div>
-                  <div>{sug.Name}</div>
-                  <div>{sug.Hex}</div>
-                </div>
-              </div>
+            {suggestions.map((color, index) => (
+              <ColorBox key={index} color={color} />
             ))}
           </div>
         </div>
       )}
-
       {allMatches.length > 0 && (
-        <div style={{ marginTop: 40 }}>
-          <h2>🌈 All Matched Colors from Image:</h2>
+        <div>
+          <h3>🧩 All Matched Colors from Image:</h3>
           <div
             style={{
               display: "flex",
@@ -222,36 +208,41 @@ function App() {
             }}
           >
             {allMatches.map((color, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  border: "1px solid #ccc",
-                  borderRadius: 5,
-                  padding: 10,
-                  width: 220,
-                }}
-              >
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    backgroundColor: color.Hex,
-                    borderRadius: 5,
-                  }}
-                />
-                <div>
-                  <div style={{ fontWeight: "bold" }}>{color.Code}</div>
-                  <div>{color.Name}</div>
-                  <div>{color.Hex}</div>
-                </div>
-              </div>
+              <ColorBox key={index} color={color} />
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ColorBox({ color }: { color: Color }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: 5,
+        padding: 10,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        minWidth: 200,
+      }}
+    >
+      <div
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 5,
+          backgroundColor: color.Hex,
+        }}
+      />
+      <div style={{ textAlign: "left" }}>
+        <div style={{ fontWeight: "bold" }}>{color.Code}</div>
+        <div>{color.Name}</div>
+        <div>{color.Hex}</div>
+      </div>
     </div>
   );
 }
