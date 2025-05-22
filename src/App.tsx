@@ -193,12 +193,9 @@ function App() {
           قم بتحميل صورة أو التقط صورة للعثور على اللون
         </h3>
       </div>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleImageUpload}
-        style={{ marginBottom: 20 }}
-      />
+      <div>
+        <input type="file" accept="image/*" onChange={handleImageUpload} />
+      </div>
 
       {image && (
         <canvas
