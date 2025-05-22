@@ -1,15 +1,32 @@
 import React, { useState, useRef, useEffect } from "react";
 import colorData from "./colorData";
 
-function getDistance(
-  r1: number,
-  g1: number,
-  b1: number,
-  r2: number,
-  g2: number,
-  b2: number
-) {
-  return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+function getLabDistance(lab1: number[], lab2: number[]): number {
+  return Math.sqrt(
+    (lab1[0] - lab2[0]) ** 2 +
+    (lab1[1] - lab2[1]) ** 2 +
+    (lab1[2] - lab2[2]) ** 2
+  );
+}
+
+function rgbToLab(r: number, g: number, b: number): number[] {
+  function pivot(n: number): number {
+    return n > 0.008856 ? Math.pow(n, 1 / 3) : (7.787 * n) + 16 / 116;
+  }
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+  const x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
+  const y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1.00000;
+  const z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+  return [
+    (116 * pivot(y)) - 16,
+    500 * (pivot(x) - pivot(y)),
+    200 * (pivot(y) - pivot(z))
+  ];
 }
 
 type Color = {
@@ -28,6 +45,46 @@ function App() {
   const [allMatches, setAllMatches] = useState<Color[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const findClosestColors = (r: number, g: number, b: number) => {
+    const baseLab = rgbToLab(r, g, b);
+    const distances = colorData.map((color) => ({
+      color,
+      dist: getLabDistance(baseLab, rgbToLab(color.R, color.G, color.B))
+    }));
+    distances.sort((a, b) => a.dist - b.dist);
+    setMainMatch(distances[0].color);
+    setSuggestions(distances.slice(1, 4).map(d => d.color));
+  };
+
+  const extractDominantColors = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { width, height } = canvas;
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+    const seen = new Set<string>();
+    const clusters: { [key: string]: Color } = {};
+
+    for (let i = 0; i < imageData.length; i += 80 * 4) {
+      const r = imageData[i];
+      const g = imageData[i + 1];
+      const b = imageData[i + 2];
+      const key = `${r}-${g}-${b}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const baseLab = rgbToLab(r, g, b);
+      const distances = colorData.map(color => ({
+        color,
+        dist: getLabDistance(baseLab, rgbToLab(color.R, color.G, color.B))
+      })).sort((a, b) => a.dist - b.dist);
+      const best = distances[0].color;
+      clusters[best.Code] = best;
+    }
+
+    setAllMatches(Object.values(clusters));
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -41,64 +98,17 @@ function App() {
     reader.readAsDataURL(file);
   };
 
-  const findClosestColors = (r: number, g: number, b: number) => {
-    const distances = colorData.map((color) => ({
-      color,
-      dist: getDistance(r, g, b, color.R, color.G, color.B),
-    }));
-    distances.sort((a, b) => a.dist - b.dist);
-    const closest = distances[0].color;
-    const top3 = distances.slice(1, 4).map((d) => d.color);
-    setMainMatch(closest);
-    setSuggestions(top3);
-  };
-
-  const extractImageColors = () => {
+  const handleCanvasClick = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const { width, height } = canvas;
-    const imageData = ctx.getImageData(0, 0, width, height).data;
-    const sampledColors = new Set<string>();
-    const matches: Color[] = [];
-
-    for (let i = 0; i < imageData.length; i += 200 * 4) {
-      const r = imageData[i];
-      const g = imageData[i + 1];
-      const b = imageData[i + 2];
-      const key = `${r}-${g}-${b}`;
-      if (sampledColors.has(key)) continue;
-      sampledColors.add(key);
-      const distances = colorData.map((color) => ({
-        color,
-        dist: getDistance(r, g, b, color.R, color.G, color.B),
-      }));
-      distances.sort((a, b) => a.dist - b.dist);
-      const bestMatch = distances[0].color;
-      if (!matches.find((c) => c.Code === bestMatch.Code)) {
-        matches.push(bestMatch);
-      }
-    }
-
-    setAllMatches(matches);
-  };
-
-  const handleCanvasClick = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
-  ) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-
     let clientX = 0;
     let clientY = 0;
-
-    if ("touches" in e) {
-      const touch = e.touches[0];
-      clientX = touch.clientX;
-      clientY = touch.clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
     } else {
       clientX = e.clientX;
       clientY = e.clientY;
@@ -107,10 +117,8 @@ function App() {
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-
     const pixel = ctx.getImageData(x, y, 1, 1).data;
     const [r, g, b] = pixel;
-
     findClosestColors(r, g, b);
   };
 
@@ -119,29 +127,26 @@ function App() {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-
     const img = new Image();
     img.onload = () => {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-      extractImageColors();
+      extractDominantColors();
     };
     img.src = image;
   }, [image]);
 
   return (
     <div style={{ textAlign: "center", padding: 20 }}>
-      <img
-        src="/logo.png"
-        alt="Logo"
-        style={{ width: 200, marginBottom: 10 }}
-      />
+      <img src="/logo.png" alt="Logo" style={{ width: 200, marginBottom: 10 }} />
       <h2>Welcome to Sewing Market Color Finder</h2>
       <h2 style={{ marginBottom: 20 }}>
         مرحباً بكم في سوق الخياطة أداة البحث عن الألوان
       </h2>
-
+      <p style={{ fontWeight: 500, marginBottom: 10 }}>
+        Upload image or Take a photo to find color
+      </p>
       <input
         type="file"
         accept="image/*"
@@ -150,18 +155,12 @@ function App() {
       />
 
       {image && (
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <canvas
-            ref={canvasRef}
-            onClick={handleCanvasClick}
-            onTouchStart={handleCanvasClick}
-            style={{
-              border: "1px solid #ccc",
-              maxWidth: "100%",
-              marginBottom: 30,
-            }}
-          />
-        </div>
+        <canvas
+          ref={canvasRef}
+          onClick={handleCanvasClick}
+          onTouchStart={handleCanvasClick}
+          style={{ border: "1px solid #ccc", maxWidth: "100%", margin: "20px auto", display: "block" }}
+        />
       )}
 
       {mainMatch && (
@@ -174,14 +173,7 @@ function App() {
       {suggestions.length > 0 && (
         <div>
           <h3>🎨 Top 3 Suggestions:</h3>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: 10,
-            }}
-          >
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
             {suggestions.map((color, index) => (
               <ColorBox key={index} color={color} />
             ))}
@@ -192,14 +184,7 @@ function App() {
       {allMatches.length > 0 && (
         <div>
           <h3>🧩 All Matched Colors from Image:</h3>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: 10,
-            }}
-          >
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
             {allMatches.map((color, index) => (
               <ColorBox key={index} color={color} />
             ))}
@@ -220,7 +205,7 @@ function ColorBox({ color }: { color: Color }) {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        minWidth: 200,
+        minWidth: 200
       }}
     >
       <div
@@ -228,7 +213,7 @@ function ColorBox({ color }: { color: Color }) {
           width: 30,
           height: 30,
           borderRadius: 5,
-          backgroundColor: color.Hex,
+          backgroundColor: color.Hex
         }}
       />
       <div style={{ textAlign: "left" }}>
