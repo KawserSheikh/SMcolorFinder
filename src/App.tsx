@@ -177,12 +177,22 @@ function App() {
       <h2 style={{ marginBottom: 25 }}>
         مرحباً بكم في سوق الخياطة أداة البحث عن الألوان
       </h2>
-      <p style={{ fontWeight: 600, marginBottom: 10 }}>
-        Upload Image or Take a photo to find color
-      </p>
-      <p style={{ fontWeight: 600, marginBottom: 10 }}>
-        قم بتحميل صورة أو التقط صورة للعثور على اللون
-      </p>
+      <div
+        style={{
+          border: "2px solid royalblue",
+          borderRadius: 8,
+          padding: 10,
+          marginBottom: 15,
+          display: "inline-block",
+        }}
+      >
+        <h3 style={{ fontWeight: 600, marginBottom: 10, color: "royalblue" }}>
+          Upload Image or Take a photo to find color
+        </h3>
+        <h3 style={{ fontWeight: 600, marginBottom: 10, color: "royalblue" }}>
+          قم بتحميل صورة أو التقط صورة للعثور على اللون
+        </h3>
+      </div>
       <input
         type="file"
         accept="image/*"
