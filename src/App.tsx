@@ -58,40 +58,28 @@ function App() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
     const { width, height } = canvas;
     const imageData = ctx.getImageData(0, 0, width, height).data;
-
+    const sampledColors = new Set<string>();
     const matches: Color[] = [];
 
-    for (let i = 0; i < imageData.length; i += 400 * 4) {
+    for (let i = 0; i < imageData.length; i += 200 * 4) {
       const r = imageData[i];
       const g = imageData[i + 1];
       const b = imageData[i + 2];
-
+      const key = `${r}-${g}-${b}`;
+      if (sampledColors.has(key)) continue;
+      sampledColors.add(key);
       const distances = colorData.map((color) => ({
         color,
         dist: getDistance(r, g, b, color.R, color.G, color.B),
       }));
       distances.sort((a, b) => a.dist - b.dist);
       const bestMatch = distances[0].color;
-
-      const isTooSimilar = matches.some(
-        (existing) =>
-          getDistance(
-            existing.R,
-            existing.G,
-            existing.B,
-            bestMatch.R,
-            bestMatch.G,
-            bestMatch.B
-          ) < 50
-      );
-
-      if (!isTooSimilar) {
+      if (!matches.find((c) => c.Code === bestMatch.Code)) {
         matches.push(bestMatch);
       }
-
-      if (matches.length >= 6) break; // optional: stop after 6 distinct matches
     }
 
     setAllMatches(matches);
@@ -117,11 +105,8 @@ function App() {
     }
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    const x = Math.floor((clientX - rect.left) * scaleX);
-    const y = Math.floor((clientY - rect.top) * scaleY);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
     const pixel = ctx.getImageData(x, y, 1, 1).data;
     const [r, g, b] = pixel;
@@ -134,6 +119,7 @@ function App() {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
+
     const img = new Image();
     img.onload = () => {
       canvas.width = img.width;
@@ -155,30 +141,36 @@ function App() {
       <h2 style={{ marginBottom: 20 }}>
         مرحباً بكم في سوق الخياطة أداة البحث عن الألوان
       </h2>
+
       <input
         type="file"
         accept="image/*"
         onChange={handleImageUpload}
         style={{ marginBottom: 20 }}
       />
+
       {image && (
-        <canvas
-          ref={canvasRef}
-          onClick={handleCanvasClick}
-          onTouchStart={handleCanvasClick}
-          style={{
-            border: "1px solid #ccc",
-            maxWidth: "100%",
-            marginBottom: 30,
-          }}
-        />
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <canvas
+            ref={canvasRef}
+            onClick={handleCanvasClick}
+            onTouchStart={handleCanvasClick}
+            style={{
+              border: "1px solid #ccc",
+              maxWidth: "100%",
+              marginBottom: 30,
+            }}
+          />
+        </div>
       )}
+
       {mainMatch && (
         <div>
           <h2>🎯 Closest Color Found:</h2>
           <ColorBox color={mainMatch} />
         </div>
       )}
+
       {suggestions.length > 0 && (
         <div>
           <h3>🎨 Top 3 Suggestions:</h3>
@@ -196,6 +188,7 @@ function App() {
           </div>
         </div>
       )}
+
       {allMatches.length > 0 && (
         <div>
           <h3>🧩 All Matched Colors from Image:</h3>
